@@ -1,8 +1,84 @@
 import requests
 from bs4 import BeautifulSoup
-import single_product
+import re
+import csv
 
-# récupérer la liste des catégories (attribut href)
+
+def number_available(availability):
+    """
+    get the availability and extracts the number of books in stock from the string
+    :param availability: string
+    :return: string
+    """
+    try:
+        nb_available = re.search(r'(\d+)', availability).group(0)
+    except AttributeError:
+        nb_available = ""
+    return nb_available
+
+
+def get_product_data(url):
+    """
+    get all the product data from a product page
+    :param url: string
+    :return: dict
+    """
+    response = requests.get(url)
+    response.encoding = "utf-8"
+    soup = ""
+    if response.ok:
+        soup = BeautifulSoup(response.text, features="html.parser")
+    else:
+        print("The requested page is unreachable")
+
+    # main product information table
+    product_information_table = soup.find("table", class_="table-striped")
+    ths = product_information_table.findAll('th')  # product caracteristic name
+    tds = product_information_table.findAll('td')  # product caracteristic detail
+    product_infos = {k.text: v.text for k, v in zip(ths, tds)}
+
+    rating_str = soup.find("p", class_="star-rating")['class'][1]
+    rating_int = {"One": 1, "Two": 2, "Three": 3, "Four": 4, "Five": 5}  # to match string rating with integers
+    image_url = soup.find("div", id="product_gallery").find('img')['src']
+
+    product = dict()
+    product['product_page_url'] = url
+    product['upc'] = product_infos['UPC']
+    product['title'] = soup.find('h1').text
+    product['price_including_tax'] = product_infos['Price (incl. tax)']
+    product['price_excluding_tax'] = product_infos['Price (excl. tax)']
+    product['number_available'] = number_available(product_infos['Availability'])
+    product['product_description'] = soup.find("div", id="product_description").find_next_siblings("p")[0].text
+    product['category'] = soup.find("li",  class_="active").find_previous_sibling().text.strip()
+    product['rating'] = rating_int[rating_str]
+    product['image_url'] = "http://books.toscrape.com" + image_url[5:]  # concat domain name + uri
+
+    return product
+
+
+def single_product_to_csv(urls):
+    """
+    write product details to a csv file
+    :param url: string, product url
+    :return: None
+    """
+    with open('data/product.csv', mode='w', newline='') as csv_file:
+        fieldnames = ['product_page_url', 'universal_ product_code (upc)', 'title', 'price_including_tax', 'price_excluding_tax', 'number_available',
+                      'product_description', 'category', 'review_rating', 'image_url']
+        writer = csv.DictWriter(csv_file, delimiter=';', quotechar='"', fieldnames=fieldnames)
+        writer.writeheader()
+        for url in urls:
+            product = get_product_data(url)
+            writer.writerow({'product_page_url': product['product_page_url'],
+                             'universal_ product_code (upc)': product['upc'],
+                             'title': product['title'],
+                             'price_including_tax': product['price_including_tax'],
+                             'price_excluding_tax': product['price_excluding_tax'],
+                             'number_available': product['number_available'],
+                             'product_description': product['product_description'],
+                             'category': product['category'],
+                             'review_rating': product['rating'],
+                             'image_url': product['image_url']})
 
 
 def get_paginate_urls(category):
@@ -54,7 +130,11 @@ def get_all_products_urls(category):
     :param category: string, url of the category
     :return: list
     """
+    urls = []
     for page in get_paginate_urls(category):
-        return get_products_urls(page)
+        for url in get_products_urls(page):
+            urls.append(url)
+    return urls
 
 
+single_product_to_csv(get_all_products_urls('fiction_10'))
