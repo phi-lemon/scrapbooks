@@ -2,7 +2,10 @@ import requests
 from bs4 import BeautifulSoup
 import re
 import csv
+import pandas as pd
 from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.console import Console, Text
+from rich.table import Table
 
 
 def number_available(availability):
@@ -162,16 +165,53 @@ def get_category_list():
     return cat_list
 
 
+# categories_list = get_category_list()
+categories_list = ['travel_2', 'mystery_3']
+
+
 def scrape_all():
-    categories_list = get_category_list()
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
         for category in categories_list:
-            task = progress.add_task(description="Scraping " + category + " books...", total=100)
+            cat_name = category[:-2]
+            task = progress.add_task(description="Scraping " + cat_name + " books...", total=100)
             category_to_csv(category)
             while not progress.finished:
                 progress.update(task, advance=1)
-    print("Done! All csv files are in the \"data\" folder")
+    console = Console()
+    text = Text("\nDone! All csv files are in the \"data\" folder\n")
+    text.stylize("bold green")
+    console.print(text)
+
+
+def data_summary():
+    df_list = []
+    for cat in categories_list:
+        try:
+            df_list.append(pd.read_csv('data/' + cat + '.csv', sep=';', header=0))
+        except FileNotFoundError:
+            print("File not found for category " + cat)
+    df = pd.concat(df_list)
+    df['price_including_tax'] = df['price_including_tax'].replace('£', '', regex=True)
+    df['price_including_tax'] = df['price_including_tax'].astype('float')
+
+    table = Table(title="Data summary")
+
+    table.add_column("Data", justify="right", style="cyan", no_wrap=True)
+    table.add_column("Value", style="sandy_brown")
+
+    table.add_row("Total products", str(df.shape[0]))
+    table.add_row("Total available products in stock", str(df['number_available'].sum()))
+    table.add_row("Average stock per product", str(round(df['number_available'].mean(), 1)))
+    table.add_row("Min stock per product", str(df['number_available'].min()))
+    table.add_row("Max stock per produc", str(df['number_available'].max()))
+    table.add_row("Average price (incl. tax)", str(round(df['price_including_tax'].mean(), 2)))
+    table.add_row("Min price (incl. tax)", str(df['price_including_tax'].min()))
+    table.add_row("Max price (incl. tax)", str(df['price_including_tax'].max()))
+
+    console = Console()
+    console.print(table)
 
 
 if __name__ == '__main__':
     scrape_all()
+    data_summary()
