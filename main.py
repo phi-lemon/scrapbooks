@@ -2,6 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 import re
 import csv
+from rich.progress import Progress, SpinnerColumn, TextColumn
 
 
 def number_available(availability):
@@ -48,7 +49,10 @@ def get_product_data(url):
     product['price_including_tax'] = product_infos['Price (incl. tax)']
     product['price_excluding_tax'] = product_infos['Price (excl. tax)']
     product['number_available'] = number_available(product_infos['Availability'])
-    product['product_description'] = soup.find("div", id="product_description").find_next_siblings("p")[0].text
+    try:
+        product['product_description'] = soup.find("div", id="product_description").find_next_siblings("p")[0].text
+    except AttributeError:
+        product['product_description'] = ''
     product['category'] = soup.find("li",  class_="active").find_previous_sibling().text.strip()
     product['rating'] = rating_int[rating_str]
     product['image_url'] = "http://books.toscrape.com" + image_url[5:]  # concat domain name + uri
@@ -56,13 +60,14 @@ def get_product_data(url):
     return product
 
 
-def single_product_to_csv(urls):
+def products_to_csv(category, urls):
     """
     write product details to a csv file
-    :param url: string, product url
+    :param category: string, products category
+    :param urls: string, product url
     :return: None
     """
-    with open('data/product.csv', mode='w', newline='') as csv_file:
+    with open('data/' + category + '.csv', mode='w', newline='', encoding='utf-8') as csv_file:
         fieldnames = ['product_page_url', 'universal_ product_code (upc)', 'title', 'price_including_tax', 'price_excluding_tax', 'number_available',
                       'product_description', 'category', 'review_rating', 'image_url']
         writer = csv.DictWriter(csv_file, delimiter=';', quotechar='"', fieldnames=fieldnames)
@@ -137,4 +142,36 @@ def get_all_products_urls(category):
     return urls
 
 
-single_product_to_csv(get_all_products_urls('fiction_10'))
+def category_to_csv(category):
+    products_to_csv(category, get_all_products_urls(category))
+
+
+def get_category_list():
+    response = requests.get('http://books.toscrape.com/index.html')
+    response.encoding = "utf-8"
+    soup = ""
+    if response.ok:
+        soup = BeautifulSoup(response.text, features="html.parser")
+    else:
+        print("The requested page is unreachable")
+    cat_list = []
+    nav = soup.find("ul", class_="nav-list").find("ul")
+    for link in nav.findAll('a'):
+        cat = link.get('href').split('/')
+        cat_list.append(cat[3])
+    return cat_list
+
+
+def scrape_all():
+    categories_list = get_category_list()
+    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
+        for category in categories_list:
+            task = progress.add_task(description="Scraping " + category + " books...", total=100)
+            category_to_csv(category)
+            while not progress.finished:
+                progress.update(task, advance=1)
+    print("Done! All csv files are in the \"data\" folder")
+
+
+if __name__ == '__main__':
+    scrape_all()
