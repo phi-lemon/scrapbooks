@@ -1,6 +1,6 @@
-# __oc_p2_analyse_marche
+# Scrapbooks
 
-__oc_p2_analyse_marche is a Python script for scraping an online books shop.
+Scrapbooks is a Python script for scraping a specific online books shop, made while studying python.
 
 ## Installation
 

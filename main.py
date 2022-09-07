@@ -165,8 +165,7 @@ def get_category_list():
     return cat_list
 
 
-# categories_list = get_category_list()
-categories_list = ['travel_2', 'mystery_3']
+categories_list = get_category_list()
 
 
 def scrape_all():
