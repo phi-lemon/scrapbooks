@@ -10,7 +10,7 @@ If you don't have python installed, download and install python from here : http
 ### Get the files
 If you have git :
 ```bash
-git clone https://github.com/phi-lemon/__oc_p2_analyse_marche.git
+git clone https://github.com/phi-lemon/scrapbooks.git
 ```
 If you don't have git, download the files (click the green "Code" button > "Download ZIP").
 Unzip all the files in a folder of your choice.
@@ -23,13 +23,12 @@ pip install -r requirements.txt
 
 ## Usage
 
-Open a terminal, go in the folder where you donwloaded the project files 
+Open a terminal, go in the folder where you downloaded the project files e.g. ```cd scraping```
 and type the folowing commands to run the script :
 
 ### On windows
 
 ```bash
-cd scraping
 venv\Scripts\activate 
 python main.py
 ```
@@ -37,7 +36,6 @@ python main.py
 ### On mac or linux
 
 ```bash
-cd scraping
 source venv/bin/activate
 python main.py
 ```
@@ -47,4 +45,4 @@ If you need to interrupt the script, press CTRL + C
 <img src="screenshot.png" alt="Alt text" title="Optional title">
 
 ## License
-[MIT](https://choosealicense.com/licenses/mit/)
+[MIT](https://github.com/phi-lemon/scrapbooks/blob/main/LICENSE.md)
