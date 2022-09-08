@@ -16,8 +16,13 @@ If you don't have git, download the files (click the green "Code" button > "Down
 Unzip all the files in a folder of your choice.
 
 ### Script installation
-First install the packages
+Create a virtual environnement, activate it (type the right command for windows or linux/mac) and install the packages.  
+Open a terminal, go in the folder where you downloaded the project files e.g. ```cd scraping``` 
+and type the folowing commands :
 ```bash
+python -m venv venv
+venv\Scripts\activate  # on windows
+source venv/bin/activate  # on linux
 pip install -r requirements.txt
 ```
 

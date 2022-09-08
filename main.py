@@ -202,7 +202,7 @@ def data_summary():
     table.add_row("Total available items in stock", str(df['number_available'].sum()))
     table.add_row("Average stock per product", str(round(df['number_available'].mean(), 1)))
     table.add_row("Min stock per product", str(df['number_available'].min()))
-    table.add_row("Max stock per produc", str(df['number_available'].max()))
+    table.add_row("Max stock per product", str(df['number_available'].max()))
     table.add_row("Average price (incl. tax)", str(round(df['price_including_tax'].mean(), 2)))
     table.add_row("Min price (incl. tax)", str(df['price_including_tax'].min()))
     table.add_row("Max price (incl. tax)", str(df['price_including_tax'].max()))
