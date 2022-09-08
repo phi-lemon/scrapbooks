@@ -6,6 +6,8 @@ import pandas as pd
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.console import Console, Text
 from rich.table import Table
+import shutil
+from pathlib import Path
 
 
 def number_available(availability):
@@ -19,6 +21,20 @@ def number_available(availability):
     except AttributeError:
         nb_available = ""
     return nb_available
+
+
+def download_img(img_url, filename, category):
+    r = requests.get(img_url, stream=True)
+    img_dir = Path.cwd() / 'data' / 'img' / category
+    if not Path.exists(img_dir):
+        img_dir.mkdir(parents=True)
+    if r.status_code == 200:
+        # Preventing the downloaded image’s size from being zero.
+        r.raw.decode_content = True
+        with open('data/img/' + category + '/' + filename + '.jpg', 'wb') as f:
+            shutil.copyfileobj(r.raw, f)
+    else:
+        print('Image ' + filename + ' Couldn\'t be retrieved')
 
 
 def get_product_data(url):
@@ -59,6 +75,9 @@ def get_product_data(url):
     product['category'] = soup.find("li",  class_="active").find_previous_sibling().text.strip()
     product['rating'] = rating_int[rating_str]
     product['image_url'] = "http://books.toscrape.com" + image_url[5:]  # concat domain name + uri
+
+    img_name = re.sub(r'[^a-zA-Z0-9 ]', '', product['title']).replace(' ', '_')
+    download_img(product['image_url'], img_name, product['category'])
 
     return product
 
@@ -171,7 +190,7 @@ categories_list = get_category_list()
 def scrape_all():
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
         for category in categories_list:
-            cat_name = category[:-2]
+            cat_name = category.split('_')[0]
             task = progress.add_task(description="Scraping " + cat_name + " books...", total=100)
             category_to_csv(category)
             while not progress.finished:
