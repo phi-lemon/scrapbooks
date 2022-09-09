@@ -72,7 +72,7 @@ class ProductData:
         return product
 
 
-class ProductImg:
+class LoadProductImg:
     """ Save a product image to disc """
     def __init__(self, img_url: str, filename: str, category: str):
         self.img_url = img_url
@@ -97,42 +97,9 @@ class ProductImg:
             print('Image ' + self.filename + ' Couldn\'t be retrieved')
 
 
-def write_to_disk(category: str, urls: list):
-    """
-    Loads all products of a category: first write products details to a csv file, then save products images to disk
-    :param category: products category
-    :param urls: list of products urls
-    :return: None
-    """
-    # Write csv
-    with open('data/' + category + '.csv', mode='w', newline='', encoding='utf-8') as csv_file:
-        fieldnames = ['product_page_url', 'universal_ product_code (upc)', 'title', 'price_including_tax', 'price_excluding_tax', 'number_available',
-                      'product_description', 'category', 'review_rating', 'image_url']
-        writer = csv.DictWriter(csv_file, delimiter=';', quotechar='"', fieldnames=fieldnames)
-        writer.writeheader()
-        for url in urls:
-            product = ProductData(url).product
-            writer.writerow({'product_page_url': product['product_page_url'],
-                             'universal_ product_code (upc)': product['upc'],
-                             'title': product['title'],
-                             'price_including_tax': product['price_including_tax'],
-                             'price_excluding_tax': product['price_excluding_tax'],
-                             'number_available': product['number_available'],
-                             'product_description': product['product_description'],
-                             'category': product['category'],
-                             'review_rating': product['rating'],
-                             'image_url': product['image_url']})
-    # Download images
-    for url in urls:
-        product = ProductData(url).product
-        img_name = re.sub(r'[^a-zA-Z0-9 ]', '', product['title']).replace(' ', '_')
-        img = ProductImg(product['image_url'], img_name, product['category'])
-        img.download_img()
-
-
-class SiteUrls:
-    """ Methods to get products page urls from a category """
-    def __init__(self, category):
+class LoadCategoryContents:
+    """ Methods to load all contents from a category """
+    def __init__(self, category: str):
         self.category = category
 
     def get_paginate_urls(self):
@@ -169,15 +136,36 @@ class SiteUrls:
                 product_urls.append(product_url)
         return product_urls
 
-
-def load_category(category: str):
-    """
-    Loads all the products of a category
-    :param category: category
-    :return: None
-    """
-    category_urls = SiteUrls(category)
-    write_to_disk(category, category_urls.get_all_products_urls())
+    def write_to_disk(self, urls: list):
+        """
+        Loads all products of a category: first write products details to a csv file, then save products images to disk
+        :param urls: list of products urls
+        :return: None
+        """
+        # Write csv
+        with open('data/' + self.category + '.csv', mode='w', newline='', encoding='utf-8') as csv_file:
+            fieldnames = ['product_page_url', 'universal_ product_code (upc)', 'title', 'price_including_tax', 'price_excluding_tax', 'number_available',
+                          'product_description', 'category', 'review_rating', 'image_url']
+            writer = csv.DictWriter(csv_file, delimiter=';', quotechar='"', fieldnames=fieldnames)
+            writer.writeheader()
+            for url in urls:
+                product = ProductData(url).product
+                writer.writerow({'product_page_url': product['product_page_url'],
+                                 'universal_ product_code (upc)': product['upc'],
+                                 'title': product['title'],
+                                 'price_including_tax': product['price_including_tax'],
+                                 'price_excluding_tax': product['price_excluding_tax'],
+                                 'number_available': product['number_available'],
+                                 'product_description': product['product_description'],
+                                 'category': product['category'],
+                                 'review_rating': product['rating'],
+                                 'image_url': product['image_url']})
+        # Download images
+        for url in urls:
+            product = ProductData(url).product
+            img_name = re.sub(r'[^a-zA-Z0-9 ]', '', product['title']).replace(' ', '_')
+            img = LoadProductImg(product['image_url'], img_name, product['category'])
+            img.download_img()
 
 
 def get_category_list():
@@ -194,19 +182,17 @@ def get_category_list():
     return cat_list
 
 
-categories_list = get_category_list()
-
-
 def scrape_all():
     """
-    Main function that loops through all the categories and scrapes the products data
+    Main function that loops through all the categories and loads product data and images
     :return:
     """
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
-        for category in categories_list:
+        for category in get_category_list():
             cat_name = category.split('_')[0]
             task = progress.add_task(description="Scraping " + cat_name + " books...", total=100)
-            load_category(category)
+            category_contents = LoadCategoryContents(category)
+            category_contents.write_to_disk(category_contents.get_all_products_urls())
             while not progress.finished:
                 progress.update(task, advance=1)
     console = Console()
@@ -218,7 +204,7 @@ def scrape_all():
 def data_summary():
     """ Function to call atfer scrape_all() to get a summary of scraped data """
     df_list = []
-    for cat in categories_list:
+    for cat in get_category_list():
         try:
             df_list.append(pd.read_csv('data/' + cat + '.csv', sep=';', header=0))
         except FileNotFoundError:
