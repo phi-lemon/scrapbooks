@@ -10,92 +10,108 @@ import shutil
 from pathlib import Path
 
 
-def number_available(availability):
-    """
-    get the availability and extracts the number of books in stock from the string
-    :param availability: string
-    :return: string
-    """
-    try:
-        nb_available = re.search(r'(\d+)', availability).group(0)
-    except AttributeError:
-        nb_available = ""
-    return nb_available
-
-
-def download_img(img_url, filename, category):
-    r = requests.get(img_url, stream=True)
-    img_dir = Path.cwd() / 'data' / 'img' / category
-    if not Path.exists(img_dir):
-        img_dir.mkdir(parents=True)
-    if r.status_code == 200:
-        # Preventing the downloaded image’s size from being zero.
-        r.raw.decode_content = True
-        with open('data/img/' + category + '/' + filename + '.jpg', 'wb') as f:
-            shutil.copyfileobj(r.raw, f)
-    else:
-        print('Image ' + filename + ' Couldn\'t be retrieved')
-
-
-def get_product_data(url):
-    """
-    get all the product data from a product page
-    :param url: string
-    :return: dict
-    """
+def make_soup(url: str):
+    """ Make a beautifulsoup object from url """
     response = requests.get(url)
-    response.encoding = "utf-8"
-    soup = ""
     if response.ok:
-        soup = BeautifulSoup(response.text, features="html.parser")
+        return BeautifulSoup(response.content, "html.parser")
     else:
         print("The requested page is unreachable")
 
-    # main product information table
-    product_information_table = soup.find("table", class_="table-striped")
-    ths = product_information_table.findAll('th')  # product caracteristic name
-    tds = product_information_table.findAll('td')  # product caracteristic detail
-    product_infos = {k.text: v.text for k, v in zip(ths, tds)}
 
-    rating_str = soup.find("p", class_="star-rating")['class'][1]
-    rating_int = {"One": 1, "Two": 2, "Three": 3, "Four": 4, "Five": 5}  # to match string rating with integers
-    image_url = soup.find("div", id="product_gallery").find('img')['src']
+class ProductData:
+    """ Extracts product data and put it in a dict """
+    def __init__(self, url: str):
+        self.url = url
+        self.soup = make_soup(url)
+        self.product = self.get_data()
 
-    product = dict()
-    product['product_page_url'] = url
-    product['upc'] = product_infos['UPC']
-    product['title'] = soup.find('h1').text
-    product['price_including_tax'] = product_infos['Price (incl. tax)']
-    product['price_excluding_tax'] = product_infos['Price (excl. tax)']
-    product['number_available'] = number_available(product_infos['Availability'])
-    try:
-        product['product_description'] = soup.find("div", id="product_description").find_next_siblings("p")[0].text
-    except AttributeError:
-        product['product_description'] = ''
-    product['category'] = soup.find("li",  class_="active").find_previous_sibling().text.strip()
-    product['rating'] = rating_int[rating_str]
-    product['image_url'] = "http://books.toscrape.com" + image_url[5:]  # concat domain name + uri
+    @staticmethod
+    def number_available(availabitilty: str):
+        """
+        Get the number of books in stock from the availibility paragraph
+        :param availabitilty: text scraped from product page
+        :return: number of items in stock (string)
+        """
+        try:
+            nb_available = re.search(r'(\d+)', availabitilty).group(0)
+        except AttributeError:
+            nb_available = ""
+        return nb_available
 
-    img_name = re.sub(r'[^a-zA-Z0-9 ]', '', product['title']).replace(' ', '_')
-    download_img(product['image_url'], img_name, product['category'])
+    def get_data(self):
+        """
+        extracts product data from product page
+        :return: product data in a dict
+        """
+        # main product information html table
+        product_information_table = self.soup.find("table", class_="table-striped")
+        ths = product_information_table.findAll('th')  # product caracteristic name
+        tds = product_information_table.findAll('td')  # product caracteristic detail
+        product_infos = {k.text: v.text for k, v in zip(ths, tds)}
 
-    return product
+        rating_str = self.soup.find("p", class_="star-rating")['class'][1]
+        rating_int = {"One": 1, "Two": 2, "Three": 3, "Four": 4, "Five": 5}  # to match string rating with integers
+        image_url = self.soup.find("div", id="product_gallery").find('img')['src']
+
+        product = dict()
+        product['product_page_url'] = self.url
+        product['upc'] = product_infos['UPC']
+        product['title'] = self.soup.find('h1').text
+        product['price_including_tax'] = product_infos['Price (incl. tax)']
+        product['price_excluding_tax'] = product_infos['Price (excl. tax)']
+        product['number_available'] = self.number_available(product_infos['Availability'])
+        try:
+            product['product_description'] = self.soup.find("div", id="product_description").find_next_siblings("p")[0].text
+        except AttributeError:
+            product['product_description'] = ''
+        product['category'] = self.soup.find("li", class_="active").find_previous_sibling().text.strip()
+        product['rating'] = rating_int[rating_str]
+        product['image_url'] = "http://books.toscrape.com" + image_url[5:]  # concat domain name + uri
+
+        return product
 
 
-def products_to_csv(category, urls):
+class ProductImg:
+    """ Save a product image to disc """
+    def __init__(self, img_url: str, filename: str, category: str):
+        self.img_url = img_url
+        self.filename = filename
+        self.category = category
+
+    def download_img(self):
+        """
+        Download the image
+        :return: None
+        """
+        r = requests.get(self.img_url, stream=True)
+        img_dir = Path.cwd() / 'data' / 'img' / self.category
+        if not Path.exists(img_dir):
+            img_dir.mkdir(parents=True)
+        if r.status_code == 200:
+            # Preventing the downloaded image’s size from being zero.
+            r.raw.decode_content = True
+            with open('data/img/' + self.category + '/' + self.filename + '.jpg', 'wb') as f:
+                shutil.copyfileobj(r.raw, f)
+        else:
+            print('Image ' + self.filename + ' Couldn\'t be retrieved')
+
+
+def write_to_disk(category: str, urls: list):
     """
-    write product details to a csv file
-    :param category: string, products category
-    :param urls: string, product url
+    Loads all products of a category: first write products details to a csv file, then save products images to disk
+    :param category: products category
+    :param urls: list of products urls
     :return: None
     """
+    # Write csv
     with open('data/' + category + '.csv', mode='w', newline='', encoding='utf-8') as csv_file:
         fieldnames = ['product_page_url', 'universal_ product_code (upc)', 'title', 'price_including_tax', 'price_excluding_tax', 'number_available',
                       'product_description', 'category', 'review_rating', 'image_url']
         writer = csv.DictWriter(csv_file, delimiter=';', quotechar='"', fieldnames=fieldnames)
         writer.writeheader()
         for url in urls:
-            product = get_product_data(url)
+            product = ProductData(url).product
             writer.writerow({'product_page_url': product['product_page_url'],
                              'universal_ product_code (upc)': product['upc'],
                              'title': product['title'],
@@ -106,76 +122,70 @@ def products_to_csv(category, urls):
                              'category': product['category'],
                              'review_rating': product['rating'],
                              'image_url': product['image_url']})
+    # Download images
+    for url in urls:
+        product = ProductData(url).product
+        img_name = re.sub(r'[^a-zA-Z0-9 ]', '', product['title']).replace(' ', '_')
+        img = ProductImg(product['image_url'], img_name, product['category'])
+        img.download_img()
 
 
-def get_paginate_urls(category):
+class SiteUrls:
+    """ Methods to get products page urls from a category """
+    def __init__(self, category):
+        self.category = category
+
+    def get_paginate_urls(self):
+        """
+        list all paginate urls of a category
+        :return: list
+        """
+        urls = ["http://books.toscrape.com/catalogue/category/books/" + self.category + "/index.html"]
+        pagination = 2
+        last_url = False
+        while not last_url:
+            url = "http://books.toscrape.com/catalogue/category/books/" + self.category + "/page-" + str(pagination) + ".html"
+            response = requests.get(url)
+            pagination += 1
+            if response.ok:
+                urls.append(url)
+                last_url = False
+            else:
+                last_url = True
+        return urls
+
+    def get_all_products_urls(self):
+        """
+        list all product links found in all pages of a category
+        :return: list
+        """
+        product_urls = []
+        for page in self.get_paginate_urls():
+            soup = make_soup(page)
+            product_titles = soup.find_all("h3")
+            for i in range(len(product_titles)):
+                product_url = product_titles[i].find('a')['href']
+                product_url = "http://books.toscrape.com/catalogue/" + product_url[9:]  # concat domain name + uri
+                product_urls.append(product_url)
+        return product_urls
+
+
+def load_category(category: str):
     """
-    list all paginate urls of a category
-    :param category: name of the category (as written in the category url)
-    :return: list
+    Loads all the products of a category
+    :param category: category
+    :return: None
     """
-    urls = ["http://books.toscrape.com/catalogue/category/books/" + category + "/index.html"]
-    pagination = 2
-    last_url = False
-    while not last_url:
-        url = "http://books.toscrape.com/catalogue/category/books/" + category + "/page-" + str(pagination) + ".html"
-        response = requests.get(url)
-        pagination += 1
-        if response.ok:
-            urls.append(url)
-            last_url = False
-        else:
-            last_url = True
-    return urls
-
-
-def get_products_urls(page):
-    """
-    list all product links in a category page
-    :param page: string, url of the category
-    :return: list
-    """
-    response = requests.get(page)
-    soup = ""
-    product_urls = []
-    if response.ok:
-        soup = BeautifulSoup(response.text, features="html.parser")
-    else:
-        print("The requested page is unreachable")
-
-    product_titles = soup.find_all("h3")
-    for i in range(len(product_titles)):
-        product_url = product_titles[i].find('a')['href']
-        product_url = "http://books.toscrape.com/catalogue/" + product_url[9:]  # concat domain name + uri
-        product_urls.append(product_url)
-    return product_urls
-
-
-def get_all_products_urls(category):
-    """
-    list all product links found in all pages of a category
-    :param category: string, url of the category
-    :return: list
-    """
-    urls = []
-    for page in get_paginate_urls(category):
-        for url in get_products_urls(page):
-            urls.append(url)
-    return urls
-
-
-def category_to_csv(category):
-    products_to_csv(category, get_all_products_urls(category))
+    category_urls = SiteUrls(category)
+    write_to_disk(category, category_urls.get_all_products_urls())
 
 
 def get_category_list():
-    response = requests.get('http://books.toscrape.com/index.html')
-    response.encoding = "utf-8"
-    soup = ""
-    if response.ok:
-        soup = BeautifulSoup(response.text, features="html.parser")
-    else:
-        print("The requested page is unreachable")
+    """
+    List all the categories from the site
+    :return: list
+    """
+    soup = make_soup('http://books.toscrape.com/index.html')
     cat_list = []
     nav = soup.find("ul", class_="nav-list").find("ul")
     for link in nav.findAll('a'):
@@ -188,11 +198,15 @@ categories_list = get_category_list()
 
 
 def scrape_all():
+    """
+    Main function that loops through all the categories and scrapes the products data
+    :return:
+    """
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
         for category in categories_list:
             cat_name = category.split('_')[0]
             task = progress.add_task(description="Scraping " + cat_name + " books...", total=100)
-            category_to_csv(category)
+            load_category(category)
             while not progress.finished:
                 progress.update(task, advance=1)
     console = Console()
@@ -202,6 +216,7 @@ def scrape_all():
 
 
 def data_summary():
+    """ Function to call atfer scrape_all() to get a summary of scraped data """
     df_list = []
     for cat in categories_list:
         try:
@@ -233,3 +248,4 @@ def data_summary():
 if __name__ == '__main__':
     scrape_all()
     data_summary()
+
