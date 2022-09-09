@@ -47,7 +47,7 @@ python main.py
 
 If you need to interrupt the script, press **CTRL + C**
 
-Screenshot (data from only 2 categories):
+Screenshot:
 
 <img src="screenshot.png" alt="Alt text" title="Optional title">
 
