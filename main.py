@@ -1,42 +1,30 @@
-import requests
-from bs4 import BeautifulSoup
 import re
 import csv
-import pandas as pd
 from rich.progress import Progress, SpinnerColumn, TextColumn
-from rich.console import Console, Text
-from rich.table import Table
+from rich.console import Text
 import shutil
 from pathlib import Path
-
-
-def make_soup(url: str):
-    """ Make a beautifulsoup object from url """
-    response = requests.get(url)
-    if response.ok:
-        return BeautifulSoup(response.content, "html.parser")
-    else:
-        print("The requested page is unreachable")
+from utils import *
 
 
 class ProductData:
-    """ Extracts product data and put it in a dict """
+    """ Extracts product data from an URL and put it in a dict """
     def __init__(self, url: str):
         self.url = url
         self.soup = make_soup(url)
         self.product = self.get_data()
 
     @staticmethod
-    def number_available(availabitilty: str):
+    def number_available(availability: str):
         """
         Get the number of books in stock from the availibility paragraph
-        :param availabitilty: text scraped from product page
+        :param availability: text scraped from product page
         :return: number of items in stock (string)
         """
         try:
-            nb_available = re.search(r'(\d+)', availabitilty).group(0)
+            nb_available = re.search(r'(\d+)', availability).group(0)
         except AttributeError:
-            nb_available = ""
+            nb_available = None
         return nb_available
 
     def get_data(self):
@@ -44,36 +32,56 @@ class ProductData:
         extracts product data from product page
         :return: product data in a dict
         """
-        # main product information html table
+        product = dict()
+        product['title'] = self.find_element(self.soup.find('h1').text)
+        product['product_page_url'] = self.url
+
+        image_url = self.soup.find("div", id="product_gallery").find('img')['src']
+        product['image_url'] = "http://books.toscrape.com" + image_url[5:] if image_url else None
+
+        # Main product information html table ###################################
         product_information_table = self.soup.find("table", class_="table-striped")
         ths = product_information_table.findAll('th')  # product caracteristic name
         tds = product_information_table.findAll('td')  # product caracteristic detail
         product_infos = {k.text: v.text for k, v in zip(ths, tds)}
 
-        rating_str = self.soup.find("p", class_="star-rating")['class'][1]
+        # Rating ##########################################################
         rating_int = {"One": 1, "Two": 2, "Three": 3, "Four": 4, "Five": 5}  # to match string rating with integers
-        image_url = self.soup.find("div", id="product_gallery").find('img')['src']
+        try:
+            rating_str = self.soup.find("p", class_="star-rating")['class'][1]
+            product['rating'] = rating_int[rating_str]
+        except IndexError:
+            product['rating'] = None
 
-        product = dict()
-        product['product_page_url'] = self.url
-        product['upc'] = product_infos['UPC']
-        product['title'] = self.soup.find('h1').text
-        product['price_including_tax'] = product_infos['Price (incl. tax)']
-        product['price_excluding_tax'] = product_infos['Price (excl. tax)']
-        product['number_available'] = self.number_available(product_infos['Availability'])
         try:
             product['product_description'] = self.soup.find("div", id="product_description").find_next_siblings("p")[0].text
         except AttributeError:
-            product['product_description'] = ''
+            product['product_description'] = None
+
         product['category'] = self.soup.find("li", class_="active").find_previous_sibling().text.strip()
-        product['rating'] = rating_int[rating_str]
-        product['image_url'] = "http://books.toscrape.com" + image_url[5:]  # concat domain name + uri
+
+        try:
+            product['upc'] = product_infos['UPC']
+        except KeyError:
+            product['upc'] = None
+
+        try:
+            product['price_including_tax'] = product_infos['Price (incl. tax)']
+        except KeyError:
+            product['price_including_tax'] = None
+
+        try:
+            product['price_excluding_tax'] = product_infos['Price (excl. tax)']
+        except KeyError:
+            product['price_excluding_tax'] = None
+
+        product['number_available'] = self.number_available(product_infos['Availability'])
 
         return product
 
 
 class LoadProductImg:
-    """ Save a product image to disc """
+    """ Get product img from an URL and save it to disk """
     def __init__(self, img_url: str, filename: str, category: str):
         self.img_url = img_url
         self.filename = filename
@@ -89,8 +97,7 @@ class LoadProductImg:
         if not Path.exists(img_dir):
             img_dir.mkdir(parents=True)
         if r.status_code == 200:
-            # Preventing the downloaded image’s size from being zero.
-            r.raw.decode_content = True
+            r.raw.decode_content = True  # otherwise download size will be 0
             with open('data/img/' + self.category + '/' + self.filename + '.jpg', 'wb') as f:
                 shutil.copyfileobj(r.raw, f)
         else:
@@ -98,9 +105,10 @@ class LoadProductImg:
 
 
 class LoadCategoryContents:
-    """ Methods to load all contents from a category """
+    """ Methods to load all product contents (data & img) from a category """
     def __init__(self, category: str):
         self.category = category
+        self.product_urls = self.get_all_products_urls()
 
     def get_paginate_urls(self):
         """
@@ -126,20 +134,19 @@ class LoadCategoryContents:
         list all product links found in all pages of a category
         :return: list
         """
-        product_urls = []
+        self.product_urls = []  # Essential! Adding self.product_urls = self.get_all_products_urls() in __init__ is not enough. But why ???
         for page in self.get_paginate_urls():
             soup = make_soup(page)
             product_titles = soup.find_all("h3")
             for i in range(len(product_titles)):
                 product_url = product_titles[i].find('a')['href']
                 product_url = "http://books.toscrape.com/catalogue/" + product_url[9:]  # concat domain name + uri
-                product_urls.append(product_url)
-        return product_urls
+                self.product_urls.append(product_url)
+        return self.product_urls
 
-    def write_to_disk(self, urls: list):
+    def products_data_to_csv(self):
         """
-        Loads all products of a category: first write products details to a csv file, then save products images to disk
-        :param urls: list of products urls
+        Loop through all products of a category and write each product data to a csv file
         :return: None
         """
         # Write csv
@@ -148,7 +155,7 @@ class LoadCategoryContents:
                           'product_description', 'category', 'review_rating', 'image_url']
             writer = csv.DictWriter(csv_file, delimiter=';', quotechar='"', fieldnames=fieldnames)
             writer.writeheader()
-            for url in urls:
+            for url in self.product_urls:
                 product = ProductData(url).product
                 writer.writerow({'product_page_url': product['product_page_url'],
                                  'universal_ product_code (upc)': product['upc'],
@@ -160,78 +167,39 @@ class LoadCategoryContents:
                                  'category': product['category'],
                                  'review_rating': product['rating'],
                                  'image_url': product['image_url']})
-        # Download images
-        for url in urls:
+
+    def products_imgs_to_disk(self):
+        """
+        Loop through all products of a category and save each product img to disk
+        :return: None
+        """
+        for url in self.product_urls:
             product = ProductData(url).product
             img_name = re.sub(r'[^a-zA-Z0-9 ]', '', product['title']).replace(' ', '_')
             img = LoadProductImg(product['image_url'], img_name, product['category'])
             img.download_img()
 
 
-def get_category_list():
-    """
-    List all the categories from the site
-    :return: list
-    """
-    soup = make_soup('http://books.toscrape.com/index.html')
-    cat_list = []
-    nav = soup.find("ul", class_="nav-list").find("ul")
-    for link in nav.findAll('a'):
-        cat = link.get('href').split('/')
-        cat_list.append(cat[3])
-    return cat_list
-
-
 def scrape_all():
     """
-    Main function that loops through all the categories and loads product data and images
-    :return:
+    Main function that loops through all the categories and loads all products data and images
+    :return: None
     """
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
         for category in get_category_list():
             cat_name = category.split('_')[0]
             task = progress.add_task(description="Scraping " + cat_name + " books...", total=100)
             category_contents = LoadCategoryContents(category)
-            category_contents.write_to_disk(category_contents.get_all_products_urls())
+            category_contents.products_data_to_csv()
+            category_contents.products_imgs_to_disk()
             while not progress.finished:
                 progress.update(task, advance=1)
     console = Console()
     text = Text("\nDone! All csv files are in the \"data\" folder\n")
     text.stylize("bold green")
     console.print(text)
-
-
-def data_summary():
-    """ Function to call atfer scrape_all() to get a summary of scraped data """
-    df_list = []
-    for cat in get_category_list():
-        try:
-            df_list.append(pd.read_csv('data/' + cat + '.csv', sep=';', header=0))
-        except FileNotFoundError:
-            print("File not found for category " + cat)
-    df = pd.concat(df_list)
-    df['price_including_tax'] = df['price_including_tax'].replace('£', '', regex=True)
-    df['price_including_tax'] = df['price_including_tax'].astype('float')
-
-    table = Table(title="Data summary")
-
-    table.add_column("Data", justify="right", style="cyan", no_wrap=True)
-    table.add_column("Value", style="sandy_brown")
-
-    table.add_row("Total products", str(df.shape[0]))
-    table.add_row("Total available items in stock", str(df['number_available'].sum()))
-    table.add_row("Average stock per product", str(round(df['number_available'].mean(), 1)))
-    table.add_row("Min stock per product", str(df['number_available'].min()))
-    table.add_row("Max stock per product", str(df['number_available'].max()))
-    table.add_row("Average price (incl. tax)", str(round(df['price_including_tax'].mean(), 2)))
-    table.add_row("Min price (incl. tax)", str(df['price_including_tax'].min()))
-    table.add_row("Max price (incl. tax)", str(df['price_including_tax'].max()))
-
-    console = Console()
-    console.print(table)
-
+    
 
 if __name__ == '__main__':
     scrape_all()
     data_summary()
-
