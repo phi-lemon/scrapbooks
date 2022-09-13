@@ -33,7 +33,7 @@ class ProductData:
         :return: product data in a dict
         """
         product = dict()
-        product['title'] = self.find_element(self.soup.find('h1').text)
+        product['title'] = self.soup.find('h1').text
         product['product_page_url'] = self.url
 
         image_url = self.soup.find("div", id="product_gallery").find('img')['src']
@@ -150,6 +150,10 @@ class LoadCategoryContents:
         :return: None
         """
         # Write csv
+        data_path = Path.cwd() / 'data'
+        if not Path.exists(data_path):
+            data_path.mkdir(parents=True)
+
         with open('data/' + self.category + '.csv', mode='w', newline='', encoding='utf-8') as csv_file:
             fieldnames = ['product_page_url', 'universal_ product_code (upc)', 'title', 'price_including_tax', 'price_excluding_tax', 'number_available',
                           'product_description', 'category', 'review_rating', 'image_url']
