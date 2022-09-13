@@ -4,7 +4,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.console import Text
 import shutil
 from pathlib import Path
-from utils import *
+from scrapbooks_utils import *
 
 
 class ProductData:
