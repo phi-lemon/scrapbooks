@@ -17,7 +17,7 @@ Unzip all the files in a folder of your choice.
 
 ### Script installation
 Create a virtual environnement, activate it (type the right command for windows or linux/mac) and install the packages.  
-Open a terminal, go in the folder where you downloaded the project files e.g. ```cd scraping``` 
+Open a terminal, go in the folder where you downloaded the project files e.g. ```cd scrapbooks``` 
 and type the folowing commands :
 ```bash
 python -m venv venv
@@ -28,7 +28,7 @@ pip install -r requirements.txt
 
 ## Usage
 
-Open a terminal, go in the folder where you downloaded the project files e.g. ```cd scraping```
+Open a terminal, go in the folder where you downloaded the project files e.g. ```cd scrapbooks```
 and type the folowing commands to run the script :
 
 ### On windows
