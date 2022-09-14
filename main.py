@@ -10,8 +10,7 @@ def main():
     :return: None
     """
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
-        # for category in ScrapUtils.get_category_list():
-        for category in ['travel_2', 'mystery_3']:
+        for category in ScrapUtils.get_category_list():
             cat_name = category.split('_')[0]
             task = progress.add_task(description="Scraping " + cat_name + " books...", total=100)
             category_contents = LoadCategoryContents(category)
