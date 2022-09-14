@@ -110,7 +110,7 @@ class LoadCategoryContents:
     """ Methods to load all product contents (data & img) from a category """
     def __init__(self, category: str):
         self.category = category
-        self.product_urls = self.get_all_products_urls()
+        self.cat_products_urls = self.get_cat_products_urls()
 
     def get_paginate_urls(self):
         """
@@ -131,20 +131,20 @@ class LoadCategoryContents:
                 last_url = True
         return urls
 
-    def get_all_products_urls(self):
+    def get_cat_products_urls(self):
         """
         list all product links found in all pages of a category
         :return: list
         """
-        self.product_urls = []  # Essential! Adding self.product_urls = self.get_all_products_urls() in __init__ is not enough. But why ???
+        products_urls = []
         for page in self.get_paginate_urls():
             soup = ScrapUtils.make_soup(page)
             product_titles = soup.find_all("h3")
             for i in range(len(product_titles)):
                 product_url = product_titles[i].find('a')['href']
                 product_url = "http://books.toscrape.com/catalogue/" + product_url[9:]  # concat domain name + uri
-                self.product_urls.append(product_url)
-        return self.product_urls
+                products_urls.append(product_url)
+        return products_urls
 
     def products_data_to_csv(self):
         """
@@ -161,7 +161,7 @@ class LoadCategoryContents:
                           'product_description', 'category', 'review_rating', 'image_url']
             writer = csv.DictWriter(csv_file, delimiter=';', quotechar='"', fieldnames=fieldnames)
             writer.writeheader()
-            for url in self.product_urls:
+            for url in self.cat_products_urls:
                 product = ProductData(url).product
                 writer.writerow({'product_page_url': product['product_page_url'],
                                  'universal_ product_code (upc)': product['upc'],
@@ -179,7 +179,7 @@ class LoadCategoryContents:
         Loop through all products of a category and save each product img to disk
         :return: None
         """
-        for url in self.product_urls:
+        for url in self.cat_products_urls:
             product = ProductData(url).product
             img_name = re.sub(r'[^a-zA-Z0-9 ]', '', product['title']).replace(' ', '_')
             img = LoadProductImg(product['image_url'], img_name, product['category'])
